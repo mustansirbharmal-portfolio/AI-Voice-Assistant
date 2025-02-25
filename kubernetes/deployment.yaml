@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-voice-assistant
+  labels:
+    app: ai-voice-assistant
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ai-voice-assistant
+  template:
+    metadata:
+      labels:
+        app: ai-voice-assistant
+    spec:
+      containers:
+      - name: ai-voice-assistant
+        image: your-dockerhub-username/ai-voice-assistant:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          valueFrom:
+            secretKeyRef:
+              name: dialogflow-credentials
+              key: credentials.json
+        - name: DIALOGFLOW_PROJECT_ID
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: project-id
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"

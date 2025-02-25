@@ -1,0 +1,63 @@
+2025-02-26 04:16:57,729 - api - INFO - API Request: {
+  "timestamp": "2025-02-26T04:16:57.729700",
+  "endpoint": "/",
+  "method": "GET",
+  "request_data": null
+}
+2025-02-26 04:16:57,733 - api - INFO - API Response: {
+  "timestamp": "2025-02-26T04:16:57.733118",
+  "endpoint": "/",
+  "status_code": 200,
+  "response_data": null,
+  "error": null
+}
+2025-02-26 04:17:02,205 - api - INFO - API Request: {
+  "timestamp": "2025-02-26T04:17:02.205635",
+  "endpoint": "/process_input",
+  "method": "POST",
+  "request_data": {
+    "message": "Hi"
+  }
+}
+2025-02-26 04:17:02,207 - api - INFO - External API Call: {
+  "timestamp": "2025-02-26T04:17:02.207020",
+  "api_name": "Dialogflow",
+  "request_data": {
+    "text": "Hi"
+  },
+  "response_data": null,
+  "error": null
+}
+2025-02-26 04:17:03,181 - api - INFO - External API Call: {
+  "timestamp": "2025-02-26T04:17:03.180998",
+  "api_name": "Dialogflow",
+  "request_data": null,
+  "response_data": {
+    "confidence": 1.0,
+    "intent": "Default Welcome Intent",
+    "response": "Hi! How are you doing?"
+  },
+  "error": null
+}
+2025-02-26 04:17:03,182 - api - INFO - API Response: {
+  "timestamp": "2025-02-26T04:17:03.182514",
+  "endpoint": "/process_input",
+  "status_code": 200,
+  "response_data": {
+    "response": "Hi! How are you doing?"
+  },
+  "error": null
+}
+2025-02-26 04:17:03,201 - api - INFO - API Request: {
+  "timestamp": "2025-02-26T04:17:03.201760",
+  "endpoint": "/",
+  "method": "GET",
+  "request_data": null
+}
+2025-02-26 04:17:03,202 - api - INFO - API Response: {
+  "timestamp": "2025-02-26T04:17:03.202359",
+  "endpoint": "/",
+  "status_code": 200,
+  "response_data": null,
+  "error": null
+}

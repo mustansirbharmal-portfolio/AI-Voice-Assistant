@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 import aiohttp
 import html
 import logging
+from utils.logger_config import log_api_request, log_api_response, log_external_api_call
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -48,130 +49,111 @@ logger.info(f"OpenRouter Model: {OPENROUTER_MODEL}")
 async def get_openrouter_response(text: str) -> dict:
     """Get response from OpenRouter API"""
     if not OPENROUTER_API_KEY:
-        logger.error("OpenRouter API key not found in environment variables")
-        return {
-            "response": "OpenRouter API key not configured.",
-            "source": "error"
-        }
+        error_msg = "OpenRouter API key not found in environment variables"
+        log_external_api_call("OpenRouter", error=error_msg)
+        raise ValueError(error_msg)
 
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": OPENROUTER_MODEL,
+        "messages": [{"role": "user", "content": text}]
+    }
+    
     try:
-        headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "HTTP-Referer": "http://localhost:8000",
-            "Content-Type": "application/json"
-        }
-        
-        payload = {
-            "model": OPENROUTER_MODEL,
-            "messages": [
-                {"role": "system", "content": "You are a helpful AI assistant. Provide clear, concise, and accurate responses."},
-                {"role": "user", "content": text}
-            ]
-        }
-
-        logger.info(f"Sending request to OpenRouter with model: {OPENROUTER_MODEL}")
+        log_external_api_call("OpenRouter", request_data={"text": text})
         async with aiohttp.ClientSession() as session:
-            async with session.post(OPENROUTER_API_URL, json=payload, headers=headers) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.info("Successfully received response from OpenRouter")
-                    return {
-                        "response": data["choices"][0]["message"]["content"],
-                        "model": data["model"],
-                        "source": "openrouter"
-                    }
-                else:
-                    error_text = await response.text()
-                    logger.error(f"OpenRouter API error status {response.status}: {error_text}")
-                    return {
-                        "response": "I apologize, but I'm having trouble connecting to my knowledge base right now.",
-                        "source": "error"
-                    }
+            async with session.post(OPENROUTER_API_URL, headers=headers, json=payload) as response:
+                result = await response.json()
+                
+                if response.status != 200:
+                    error_msg = f"OpenRouter API error: {result.get('error', 'Unknown error')}"
+                    log_external_api_call("OpenRouter", error=error_msg)
+                    raise ValueError(error_msg)
+                
+                log_external_api_call("OpenRouter", response_data=result)
+                return result
     except Exception as e:
-        logger.error(f"OpenRouter API error: {e}")
-        return {
-            "response": "I apologize, but I'm having trouble processing your request right now.",
-            "source": "error"
-        }
+        error_msg = f"Error calling OpenRouter API: {str(e)}"
+        log_external_api_call("OpenRouter", error=error_msg)
+        raise
 
-async def detect_intent(text: str) -> dict:
+async def detect_intent(text: str) -> str:
     """Detect intent using Dialogflow with fallback to OpenRouter"""
     try:
+        log_external_api_call("Dialogflow", request_data={"text": text})
         session_client = dialogflow.SessionsClient()
         session = session_client.session_path(DIALOGFLOW_PROJECT_ID, "unique-session-id")
         
         text_input = dialogflow.TextInput(text=text, language_code=DIALOGFLOW_LANGUAGE_CODE)
         query_input = dialogflow.QueryInput(text=text_input)
-
-        try:
-            logger.info("Sending request to Dialogflow")
-            response = session_client.detect_intent(
-                request={"session": session, "query_input": query_input}
-            )
-            
-            confidence = response.query_result.intent_detection_confidence
-            logger.info(f"Dialogflow confidence: {confidence}")
-
-            if confidence >= CONFIDENCE_THRESHOLD:
-                logger.info(f"Using Dialogflow response with intent: {response.query_result.intent.display_name}")
-                return {
-                    "intent": response.query_result.intent.display_name,
-                    "response": response.query_result.fulfillment_text,
-                    "confidence": confidence,
-                    "source": "dialogflow"
-                }
-            
-            logger.info("Confidence below threshold, falling back to OpenRouter")
-            return await get_openrouter_response(text)
-
-        except Exception as e:
-            logger.error(f"Error in Dialogflow API call: {e}")
-            return await get_openrouter_response(text)
-
+        
+        response = session_client.detect_intent(request={"session": session, "query_input": query_input})
+        
+        confidence = response.query_result.intent_detection_confidence
+        log_external_api_call("Dialogflow", response_data={
+            "confidence": confidence,
+            "intent": response.query_result.intent.display_name,
+            "response": response.query_result.fulfillment_text
+        })
+        
+        if confidence >= CONFIDENCE_THRESHOLD:
+            return response.query_result.fulfillment_text
+        
+        # Fallback to OpenRouter for low confidence responses
+        openrouter_response = await get_openrouter_response(text)
+        return openrouter_response['choices'][0]['message']['content']
+        
     except Exception as e:
-        logger.error(f"Error creating Dialogflow client: {e}")
-        return await get_openrouter_response(text)
+        error_msg = f"Error in intent detection: {str(e)}"
+        log_external_api_call("Dialogflow", error=error_msg)
+        raise
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
     """Render the main page"""
-    return templates.TemplateResponse("index.html", {"request": request, "chat_history": chat_history})
+    try:
+        log_api_request("/", "GET")
+        response = templates.TemplateResponse(
+            "index.html",
+            {"request": request, "chat_history": chat_history}
+        )
+        log_api_response("/", response.status_code)
+        return response
+    except Exception as e:
+        error_msg = f"Error rendering main page: {str(e)}"
+        log_api_response("/", 500, error=error_msg)
+        raise
 
 @app.post("/process_input")
 async def process_input(message: str = Form(...)):
     """Process user input and return response"""
     try:
-        logger.info(f"Processing input: {message}")
-        result = await detect_intent(message)
+        log_api_request("/process_input", "POST", {"message": message})
         
-        formatted_response = result["response"]
-        source_info = ""
+        # Process the message
+        response_text = await detect_intent(message)
         
-        if result.get("source") == "dialogflow":
-            source_info = f'<span class="source-info">Intent: {result["intent"]} (Confidence: {result["confidence"]:.2f})</span>'
-            logger.info(f"Using Dialogflow response with intent: {result['intent']}")
-        elif result.get("source") == "openrouter":
-            source_info = f'<span class="source-info">Model: {result.get("model", "AI Model")}</span>'
-            logger.info("Using OpenRouter response")
-        else:
-            logger.warning(f"Unknown source: {result.get('source')}")
-        
-        interaction = {
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        # Update chat history
+        chat_entry = {
             "user_input": html.escape(message),
-            "bot_response": formatted_response,
-            "source_info": source_info
+            "bot_response": response_text,
+            "timestamp": datetime.now().isoformat()
         }
-        chat_history.append(interaction)
+        chat_history.append(chat_entry)
         
-        return JSONResponse(content=interaction)
+        response_data = {"response": response_text}
+        log_api_response("/process_input", 200, response_data)
+        return JSONResponse(response_data)
+        
     except Exception as e:
-        logger.error(f"Error processing input: {e}")
+        error_msg = f"Error processing input: {str(e)}"
+        log_api_response("/process_input", 500, error=error_msg)
         return JSONResponse(
-            content={
-                "error": "An error occurred while processing your request",
-                "details": str(e)
-            },
+            {"error": str(e)},
             status_code=500
         )
 

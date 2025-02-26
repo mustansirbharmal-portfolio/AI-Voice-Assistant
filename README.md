@@ -2,6 +2,9 @@
 
 A simple AI Voice Assistant built with FastAPI, featuring voice recognition and basic intent matching.
 
+## Google Drive Video Demonstration Link
+Link: https://drive.google.com/file/d/1L88-7qppnCnnLB2_xEMUiyxvc1t09nO0/view?usp=sharing
+
 ## Features
 
 - Text and voice input support
